@@ -42,7 +42,7 @@ public:
 	~function();
 
 	// operator = (F && f) has strong exception guarantree:
-	// is the assignment throws,
+	// if the assignment throws, the function remains unchanged
 
 	template <typename F>
 	std::enable_if_t<uses_static_storage<std::decay_t<F>>::value, function &>
