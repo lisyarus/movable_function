@@ -81,7 +81,8 @@ template <typename R, typename ... Args>
 function<R(Args...)>::function (function && other) noexcept
 {
 	vtable_ = other.vtable_;
-	vtable_->move(&other.storage_, &storage_);
+	if (vtable_)
+		vtable_->move(&other.storage_, &storage_);
 	other.reset();
 }
 
@@ -93,7 +94,8 @@ function<R(Args...)> & function<R(Args...)>::operator = (function && other) noex
 
 	reset();
 	vtable_ = other.vtable_;
-	vtable_->move(&other.storage_, &storage_);
+	if (vtable_)
+		vtable_->move(&other.storage_, &storage_);
 	other.reset();
 	return *this;
 }
