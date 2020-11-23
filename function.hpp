@@ -10,6 +10,22 @@ struct function;
 template <typename R, typename ... Args>
 struct function<R(Args...)>
 {
+private:
+	static constexpr std::size_t storage_size = sizeof(void*) * 3;
+	static constexpr std::size_t storage_align = alignof(void*);
+
+	template <typename T>
+	struct uses_static_storage
+		: std::bool_constant<true
+			&& sizeof(T) <= storage_size
+			&& alignof(T) <= storage_align
+			&& ((storage_align % alignof(T)) == 0)
+			&& std::is_nothrow_move_constructible_v<T>
+			>
+	{};
+
+public:
+
 	using signature = R(Args...);
 
 	function() noexcept = default;
@@ -25,8 +41,16 @@ struct function<R(Args...)>
 
 	~function();
 
+	// operator = (F && f) has strong exception guarantree:
+	// is the assignment throws,
+
 	template <typename F>
-	function & operator = (F && f);
+	std::enable_if_t<uses_static_storage<std::decay_t<F>>::value, function &>
+		operator = (F && f);
+
+	template <typename F>
+	std::enable_if_t<!uses_static_storage<std::decay_t<F>>::value, function &>
+		operator = (F && f);
 
 	explicit operator bool() const
 	{
@@ -38,10 +62,9 @@ struct function<R(Args...)>
 
 	void reset();
 
-private:
-	static constexpr std::size_t storage_size = sizeof(void*) * 3;
-	static constexpr std::size_t storage_align = alignof(void*);
+	void swap(function & other) noexcept;
 
+private:
 	std::aligned_storage_t<storage_size, storage_align> storage_;
 
 	struct vtable
@@ -70,10 +93,20 @@ function<R(Args...)>::function(F && f)
 
 template <typename R, typename ... Args>
 template <typename F>
-function<R(Args...)> & function<R(Args...)>::operator = (F && f)
+std::enable_if_t<function<R(Args...)>::template uses_static_storage<std::decay_t<F>>::value, function<R(Args...)> &>
+	function<R(Args...)>::operator = (F && f)
 {
 	reset();
 	assign(std::forward<F>(f));
+	return *this;
+}
+
+template <typename R, typename ... Args>
+template <typename F>
+std::enable_if_t<!function<R(Args...)>::template uses_static_storage<std::decay_t<F>>::value, function<R(Args...)> &>
+	function<R(Args...)>::operator = (F && f)
+{
+	function(std::forward<F>(f)).swap(*this);
 	return *this;
 }
 
@@ -126,19 +159,18 @@ void function<R(Args...)>::reset()
 }
 
 template <typename R, typename ... Args>
+void function<R(Args...)>::swap(function & other) noexcept
+{
+	std::swap(*this, other);
+}
+
+template <typename R, typename ... Args>
 template <typename F>
 void function<R(Args...)>::assign(F && f)
 {
 	using T = std::decay_t<F>;
 
-	constexpr bool static_storage = true
-		&& sizeof(T) <= storage_size
-		&& alignof(T) <= storage_align
-		&& ((storage_align % alignof(T)) == 0)
-		&& std::is_nothrow_move_constructible_v<T>
-		;
-
-	if constexpr (static_storage)
+	if constexpr (uses_static_storage<T>::value)
 	{
 		new (reinterpret_cast<T *>(&storage_)) T(std::move(f));
 
