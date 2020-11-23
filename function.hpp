@@ -23,6 +23,8 @@ struct function<R(Args...)>
 	function (function const &) = delete;
 	function & operator = (function const &) = delete;
 
+	~function();
+
 	template <typename F>
 	function & operator = (F && f);
 
@@ -94,6 +96,12 @@ function<R(Args...)> & function<R(Args...)>::operator = (function && other) noex
 	vtable_->move(&other.storage_, &storage_);
 	other.reset();
 	return *this;
+}
+
+template <typename R, typename ... Args>
+function<R(Args...)>::~function()
+{
+	reset();
 }
 
 template <typename R, typename ... Args>
