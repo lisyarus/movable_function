@@ -89,6 +89,7 @@ function<R(Args...)> & function<R(Args...)>::operator = (function && other) noex
 	if (this == &other)
 		return *this;
 
+	reset();
 	vtable_ = other.vtable_;
 	vtable_->move(&other.storage_, &storage_);
 	other.reset();
